@@ -1,0 +1,287 @@
+package com.phantomz.hud;
+
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.GuiGraphics;
+import net.minecraft.resources.ResourceLocation;
+import net.minecraft.world.entity.player.Player;
+import net.minecraftforge.api.distmarker.Dist;
+import net.minecraftforge.client.event.CustomizeGuiOverlayEvent;
+import net.minecraftforge.client.event.RenderGuiOverlayEvent;
+import net.minecraftforge.client.event.RegisterGuiOverlaysEvent;
+import net.minecraftforge.client.gui.overlay.GuiOverlayManager;
+import net.minecraftforge.client.gui.overlay.NamedGuiOverlay;
+import net.minecraftforge.client.gui.overlay.VanillaGuiOverlay;
+import net.minecraftforge.eventbus.api.EventPriority;
+import net.minecraftforge.eventbus.api.SubscribeEvent;
+import net.minecraftforge.fml.common.Mod;
+import net.minecraftforge.fml.loading.FMLPaths;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
+import java.nio.file.Files;
+import java.util.Locale;
+
+/** Overlay registration, vanilla / other-mod HUD hiding and the boss bar hook. */
+public final class HudEvents {
+    private HudEvents() {}
+
+    private static final Logger LOG = LogManager.getLogger("PhantomZHud");
+
+    @Mod.EventBusSubscriber(modid = PhantomZHud.MODID, bus = Mod.EventBusSubscriber.Bus.MOD, value = Dist.CLIENT)
+    public static final class ModBus {
+        private ModBus() {}
+
+        @SubscribeEvent
+        public static void keys(net.minecraftforge.client.event.RegisterKeyMappingsEvent e) {
+            e.register(Layout.KEY);
+        }
+
+        @SubscribeEvent
+        public static void register(RegisterGuiOverlaysEvent e) {
+            e.registerAboveAll("phantomz_hud", (gui, g, partial, w, h) -> {
+                try {
+                    if (HudConfig.ENABLED.get()) render(g, partial, w, h);
+                } catch (Throwable t) {
+                    LOG.warn("render error: {}", t.toString());
+                }
+            });
+        }
+    }
+
+    @Mod.EventBusSubscriber(modid = PhantomZHud.MODID, value = Dist.CLIENT)
+    public static final class ForgeBus {
+        private ForgeBus() {}
+
+        private static final ResourceLocation[] SCH = {
+            new ResourceLocation("souls_combat_hud", "player_gauge_overlay"),
+            new ResourceLocation("souls_combat_hud", "experience_overlay"),
+            new ResourceLocation("souls_combat_hud", "skill_overlay"),
+            new ResourceLocation("souls_combat_hud", "equipment_hud"),
+            new ResourceLocation("souls_combat_hud", "souls_bossbar"),
+        };
+        @SubscribeEvent
+        public static void layoutKey(net.minecraftforge.event.TickEvent.ClientTickEvent e) {
+            if (e.phase != net.minecraftforge.event.TickEvent.Phase.END) return;
+            Minecraft mc = Minecraft.getInstance();
+            while (Layout.KEY.consumeClick()) {
+                if (mc.screen == null && mc.player != null) Layout.openRequested = true;
+            }
+            if (Layout.openRequested && mc.screen == null && mc.player != null) {
+                Layout.openRequested = false;
+                mc.setScreen(new LayoutScreen());
+            }
+        }
+
+        @SubscribeEvent
+        public static void commands(net.minecraftforge.client.event.RegisterClientCommandsEvent e) {
+            var node = e.getDispatcher().register(net.minecraft.commands.Commands.literal("phantomzhud")
+                    .then(net.minecraft.commands.Commands.literal("edit").executes(c -> {
+                        Layout.openRequested = true;
+                        return 1;
+                    }))
+                    .then(net.minecraft.commands.Commands.literal("debug").executes(c -> {
+                        Minecraft dm = Minecraft.getInstance();
+                        if (dm.player != null) {
+                            for (String line : BossBars.debugLines()) dm.player.sendSystemMessage(net.minecraft.network.chat.Component.literal(line));
+                        }
+                        return 1;
+                    }))
+                    .then(net.minecraft.commands.Commands.literal("reset").executes(c -> {
+                        Layout.resetAll();
+                        return 1;
+                    }))
+                    .then(net.minecraft.commands.Commands.literal("preset")
+                            .then(net.minecraft.commands.Commands.literal("default").executes(c -> {
+                                Layout.setItemsStyle(Layout.ItemsStyle.CLUSTER);
+                                return 1;
+                            }))
+                            .then(net.minecraft.commands.Commands.literal("modular").executes(c -> {
+                                Layout.setItemsStyle(Layout.ItemsStyle.ROW);
+                                return 1;
+                            }))));
+        }
+
+        private static final ResourceLocation ADV_COMPASS = new ResourceLocation("advancedcompass", "compass");
+
+        @SubscribeEvent
+        public static void hideOthers(RenderGuiOverlayEvent.Pre e) {
+            if (!HudConfig.ENABLED.get()) return;
+            ResourceLocation id = e.getOverlay().id();
+            boolean hide = id.equals(VanillaGuiOverlay.PLAYER_HEALTH.id())
+                    || id.equals(VanillaGuiOverlay.ARMOR_LEVEL.id())
+                    || id.equals(VanillaGuiOverlay.FOOD_LEVEL.id())
+                    || (HudConfig.SHOW_XP.get() && id.equals(VanillaGuiOverlay.EXPERIENCE_BAR.id()))
+                    || (HudConfig.SHOW_EFFECTS.get() && id.equals(VanillaGuiOverlay.POTION_ICONS.id()))
+                    || (HudConfig.SHOW_COMPASS.get() && id.equals(ADV_COMPASS));
+            if (!hide && HudConfig.HIDE_OTHER_HUDS.get()) {
+                for (ResourceLocation r : SCH) {
+                    if (r.equals(id)) {
+                        hide = true;
+                        break;
+                    }
+                }
+            }
+            if (!hide && matchesHideList(id)) hide = true;
+            if (!hide && HudConfig.BUILTIN_HIDE.get() && builtinHide(id)) hide = true;
+            if (!hide && HudConfig.SHOW_BOSS.get() && HudConfig.AUTO_HIDE_BOSS.get() && looksLikeBossOverlay(id)) hide = true;
+            if (hide && !protectedOverlay(id)) e.setCanceled(true);
+        }
+
+        /** Epic Fight's HUD and Iron's Spells' mana bar / spell slots (its cast and imbue overlays stay). */
+        private static boolean builtinHide(ResourceLocation id) {
+            String ns = id.getNamespace(), path = id.getPath().toLowerCase(Locale.ROOT);
+            if (ns.equals("epicfight")) return true;
+            return ns.equals("irons_spellbooks") && (path.equals("mana_overlay") || path.equals("spell_bar"));
+        }
+
+        /** Overlays that must always stay: Iron's spell wheel (hold-to-select), cast / recast bars, screen effects, tooltips. */
+        private static boolean protectedOverlay(ResourceLocation id) {
+            if (!id.getNamespace().equals("irons_spellbooks")) return false;
+            String path = id.getPath();
+            return path.equals("spell_wheel") || path.equals("cast_bar") || path.equals("recast_bar")
+                    || path.equals("screen_effects") || path.equals("screen_tooltip");
+        }
+
+        private static boolean looksLikeBossOverlay(ResourceLocation id) {
+            String ns = id.getNamespace();
+            if (ns.equals("minecraft") || ns.equals(PhantomZHud.MODID)) return false;
+            String p = id.getPath().toLowerCase(Locale.ROOT);
+            if (!p.contains("boss")) return false;
+            for (String bad : new String[] {"intro", "title", "cinematic", "cutscene", "warning"}) {
+                if (p.contains(bad)) return false;
+            }
+            return true;
+        }
+
+        // Vanilla boss bars and the vanilla hotbar are NOT cancelled (that stops mods that hook them, e.g. boss intros).
+        // They are drawn 20000 px above the screen instead, so every hook still runs but nothing is visible.
+        private static ResourceLocation sunk;
+
+        private static boolean sinkWanted(RenderGuiOverlayEvent e) {
+            if (!HudConfig.ENABLED.get()) return false;
+            ResourceLocation id = e.getOverlay().id();
+            if (id.equals(VanillaGuiOverlay.BOSS_EVENT_PROGRESS.id())) return HudConfig.SHOW_BOSS.get() && !BossBars.unavailable();
+            if (id.equals(VanillaGuiOverlay.MOUNT_HEALTH.id())) {
+                Player rp = Minecraft.getInstance().player;
+                return HudConfig.SHOW_MOUNT.get() && rp != null && rp.getVehicle() instanceof net.minecraft.world.entity.LivingEntity;
+            }
+            if (id.equals(VanillaGuiOverlay.HOTBAR.id())) {
+                Player p = Minecraft.getInstance().player;
+                return HudConfig.SHOW_HOTBAR.get() && p != null && !p.isSpectator() && !Minecraft.getInstance().options.hideGui;
+            }
+            return false;
+        }
+
+        @SubscribeEvent(priority = EventPriority.HIGHEST)
+        public static void sinkPre(RenderGuiOverlayEvent.Pre e) {
+            if (!sinkWanted(e)) return;
+            e.getGuiGraphics().pose().pushPose();
+            e.getGuiGraphics().pose().translate(0f, -20000f, 0f);
+            sunk = e.getOverlay().id();
+        }
+
+        @SubscribeEvent(priority = EventPriority.LOWEST, receiveCanceled = true)
+        public static void sinkCancelled(RenderGuiOverlayEvent.Pre e) {
+            if (sunk != null && e.isCanceled() && sunk.equals(e.getOverlay().id())) {
+                e.getGuiGraphics().pose().popPose();
+                sunk = null;
+            }
+        }
+
+        @SubscribeEvent(priority = EventPriority.LOWEST, receiveCanceled = true)
+        public static void sinkPost(RenderGuiOverlayEvent.Post e) {
+            if (sunk != null && sunk.equals(e.getOverlay().id())) {
+                e.getGuiGraphics().pose().popPose();
+                sunk = null;
+            }
+        }
+
+        // Saint's Dragons' own ride health bar is drawn from a Post handler (no overlay id): block just its rectangle.
+        @SubscribeEvent(priority = EventPriority.HIGHEST)
+        public static void dragonBarsPost(RenderGuiOverlayEvent.Post e) {
+            if (!DragonBars.wanted()) return;
+            DragonBars.begin(e.getGuiGraphics(), e.getWindow().getGuiScaledWidth(), e.getWindow().getGuiScaledHeight());
+        }
+
+        @SubscribeEvent(priority = EventPriority.LOWEST, receiveCanceled = true)
+        public static void dragonBarsPostEnd(RenderGuiOverlayEvent.Post e) {
+            DragonBars.end(e.getGuiGraphics());
+        }
+
+        private static boolean matchesHideList(ResourceLocation id) {
+            String full = id.toString();
+            for (String pat : HudConfig.HIDE_OVERLAYS.get()) {
+                if (pat.endsWith("*")) {
+                    if (full.startsWith(pat.substring(0, pat.length() - 1))) return true;
+                } else if (full.equals(pat)) {
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        // held item name: lifted so it clears the XP bar. Lowest priority so we only push when nobody cancelled it.
+        @SubscribeEvent(priority = EventPriority.LOWEST)
+        public static void itemNamePre(RenderGuiOverlayEvent.Pre e) {
+            if (!HudConfig.ENABLED.get() || !e.getOverlay().id().equals(VanillaGuiOverlay.ITEM_NAME.id())) return;
+            e.getGuiGraphics().pose().pushPose();
+            e.getGuiGraphics().pose().translate(0f, -HudConfig.ITEM_NAME_RAISE.get(), 0f);
+            itemNamePushed = true;
+        }
+
+        @SubscribeEvent(priority = EventPriority.HIGHEST)
+        public static void itemNamePost(RenderGuiOverlayEvent.Post e) {
+            if (itemNamePushed && e.getOverlay().id().equals(VanillaGuiOverlay.ITEM_NAME.id())) {
+                e.getGuiGraphics().pose().popPose();
+                itemNamePushed = false;
+            }
+        }
+
+        private static boolean itemNamePushed;
+
+        // chat: moved right and up so it no longer sits on the player block and equipment slots
+        @SubscribeEvent
+        public static void chat(CustomizeGuiOverlayEvent.Chat e) {
+            if (!HudConfig.ENABLED.get() || !HudConfig.MOVE_CHAT.get()) return;
+            float scale = HudConfig.scale();
+            e.setPosX(e.getPosX() + Math.round(HudConfig.CHAT_SHIFT_X.get() * scale));
+            e.setPosY(e.getPosY() - Math.round(HudConfig.CHAT_SHIFT_Y.get() * scale));
+        }
+    }
+
+    private static void render(GuiGraphics g, float partial, int sw, int sh) {
+        Minecraft mc = Minecraft.getInstance();
+        Player p = mc.player;
+        if (p == null || mc.options.hideGui || p.isSpectator()) return;
+        float scale = HudConfig.scale();
+        logOverlaysOnce();
+
+        final Player fp = p;
+        final float fs = scale;
+        if (HudConfig.SHOW_COMPASS.get()) Layout.draw(g, Layout.Mod.COMPASS, sw, sh, () -> CompassBar.render(g, mc.font, fp, sw, fs, partial));
+        Layout.draw(g, Layout.Mod.PLAYER, sw, sh, () -> PlayerBlock.render(g, fp, sw, sh, fs, partial));
+        if (HudConfig.SHOW_SKILLS.get()) Layout.draw(g, Layout.Mod.SKILLS, sw, sh, () -> SkillRow.render(g, fp, sh, fs, partial));
+        if (HudConfig.SHOW_HOTBAR.get() || HudConfig.SHOW_XP.get()) Layout.draw(g, Layout.Mod.ITEMS, sw, sh, () -> DiamondHotbar.render(g, mc.font, fp, sw, sh, fs, partial));
+        if (HudConfig.SHOW_MOUNT.get()) Layout.draw(g, Layout.Mod.MOUNT, sw, sh, () -> MountBar.render(g, mc.font, fp, sw, sh, fs));
+        if (HudConfig.SHOW_EFFECTS.get()) Layout.draw(g, Layout.Mod.EFFECTS, sw, sh, () -> EffectsStrip.render(g, mc.font, fp, sw, sh, fs));
+        if (HudConfig.SHOW_BOSS.get()) Layout.draw(g, Layout.Mod.BOSS, sw, sh, () -> BossBars.renderAll(g, sw, sh, fs));
+    }
+
+    private static boolean logged;
+
+    /** Writes every registered overlay id to the log once, so ids for the hide list can be looked up. */
+    private static void logOverlaysOnce() {
+        if (logged) return;
+        logged = true;
+        try {
+            StringBuilder sb = new StringBuilder();
+            for (NamedGuiOverlay o : GuiOverlayManager.getOverlays()) sb.append(o.id()).append(", ");
+            LOG.info("Registered HUD overlays: {}", sb);
+            StringBuilder file = new StringBuilder("# Every HUD overlay id registered in this game (written by PhantomZ HUD at startup).\n"
+                    + "# Add ids you want hidden to hide_overlays in phantomz_hud-client.toml ('modid:*' hides a whole mod).\n");
+            for (NamedGuiOverlay o : GuiOverlayManager.getOverlays()) file.append(o.id()).append('\n');
+            Files.writeString(FMLPaths.CONFIGDIR.get().resolve("phantomz_hud-overlays.txt"), file.toString());
+        } catch (Throwable t) {
+            LOG.warn("Could not list overlays: {}", t.toString());
+        }
+    }
+}

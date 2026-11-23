@@ -4,8 +4,8 @@ plugins {
 }
 
 version = mod_version
-group = 'com.phantomx.hud'
-base { archivesName = 'phantomx-hud-forge-' + minecraft_version }
+group = 'com.phantomz.hud'
+base { archivesName = 'PhantomZ-HUD-forge-' + minecraft_version }
 
 java.toolchain.languageVersion = JavaLanguageVersion.of(17)
 
