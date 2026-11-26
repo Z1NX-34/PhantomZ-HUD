@@ -45,7 +45,7 @@ final class Layout {
 
     /** How the item module is arranged: the modular row (default: big slot far right, clumps to its left) or the diamond cluster. */
     enum ItemsStyle {
-        ROW("Modular"), CLUSTER("Cluster");
+        ROW("Modular"), CLUSTER("Cluster"), VANILLA("Vanilla");
 
         final String label;
 
@@ -59,6 +59,12 @@ final class Layout {
     }
 
     private static ItemsStyle itemsStyle = ItemsStyle.ROW;
+
+    /** Modular when the modpack's combat / spell mods are present, the Vanilla preset otherwise. */
+    static ItemsStyle defaultStyle() {
+        var ml = net.minecraftforge.fml.ModList.get();
+        return ml.isLoaded("epicfight") || ml.isLoaded("irons_spellbooks") ? ItemsStyle.ROW : ItemsStyle.VANILLA;
+    }
 
     static ItemsStyle itemsStyle() {
         if (!loaded) load();
@@ -102,6 +108,7 @@ final class Layout {
 
     static void load() {
         loaded = true;
+        itemsStyle = defaultStyle();
         try {
             Path p = file();
             if (!Files.exists(p)) return;
@@ -110,7 +117,7 @@ final class Layout {
                 try {
                     itemsStyle = ItemsStyle.valueOf(root.get("itemsStyle").getAsString());
                 } catch (IllegalArgumentException ignored) {
-                    itemsStyle = ItemsStyle.ROW;
+                    itemsStyle = defaultStyle();
                 }
             }
             JsonObject mods = root.getAsJsonObject("modules");
@@ -209,10 +216,11 @@ final class Layout {
             }
             case ITEMS: {
                 float ms = s * HudConfig.MODULE_SCALE.get().floatValue();
-                if (itemsStyle() == ItemsStyle.ROW) {
+                if (itemsStyle() != ItemsStyle.CLUSTER) {
                     float[] c = DiamondHotbar.rowCenter(sw, sh, s);
                     float rm = DiamondHotbar.rowMainHalf();
-                    float left = rm + DiamondHotbar.ROW_GAP + 2f * 21f + 2f * (2f * 21f + 3.2f) + 4f;
+                    float left = rm + (itemsStyle() == ItemsStyle.VANILLA ? DiamondHotbar.vanillaReach()
+                            : DiamondHotbar.ROW_GAP + 2f * 21f + 2f * (2f * 21f + 3.2f) + 4f);
                     return new Frame(c[0], c[1], ms, -left, -(rm + 8f), rm + 8f, rm + 14f);
                 }
                 return new Frame(sw - ms * HudConfig.MODULE_MARGIN_X.get(), sh - ms * HudConfig.MODULE_MARGIN_Y.get(), ms,
@@ -225,13 +233,13 @@ final class Layout {
                 return new Frame(sw - 4f * s, sh / 2f + HudConfig.EFFECTS_OFFSET_Y.get() * s, s, -((cols - 1) * 73.2f + 66f), -h, 1f, h);
             }
             case COMPASS: {
-                float half = HudConfig.COMPASS_WIDTH.get() / 2f + 7f;
-                return new Frame(sw / 2f, 5f, s, -half - 9f, -5f, half + 9f, 20f);
+                float half = HudConfig.COMPASS_WIDTH.get() / 2f + 32f;
+                return new Frame(sw / 2f, 5f, s, -half, -1f, half, 25f);
             }
             case BOSS: {
                 int k = Math.max(1, Math.min(BossBars.count(), HudConfig.BOSS_MAX.get()));
                 float w = Math.min(270f, sw / s * 0.42f);
-                return new Frame(sw / 2f, sh - 92f * s, s, -w / 2f - 11f, -14f - (k - 1) * 34f, w / 2f + 11f, 12f);
+                return new Frame(sw / 2f, sh - 92f * s, s, -w / 2f - 2f, -23f - (k - 1) * 50f, w / 2f + 2f, 24f);
             }
             default: {
                 float lift = p != null ? DragonBars.mountLift(p.getVehicle()) : 0f;

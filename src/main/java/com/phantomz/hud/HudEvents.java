@@ -91,11 +91,15 @@ public final class HudEvents {
                     }))
                     .then(net.minecraft.commands.Commands.literal("preset")
                             .then(net.minecraft.commands.Commands.literal("default").executes(c -> {
-                                Layout.setItemsStyle(Layout.ItemsStyle.ROW);
+                                Layout.setItemsStyle(Layout.defaultStyle());
                                 return 1;
                             }))
                             .then(net.minecraft.commands.Commands.literal("modular").executes(c -> {
                                 Layout.setItemsStyle(Layout.ItemsStyle.ROW);
+                                return 1;
+                            }))
+                            .then(net.minecraft.commands.Commands.literal("vanilla").executes(c -> {
+                                Layout.setItemsStyle(Layout.ItemsStyle.VANILLA);
                                 return 1;
                             }))
                             .then(net.minecraft.commands.Commands.literal("cluster").executes(c -> {

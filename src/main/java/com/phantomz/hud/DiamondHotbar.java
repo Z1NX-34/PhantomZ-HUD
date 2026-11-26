@@ -42,7 +42,9 @@ final class DiamondHotbar {
 
     static void render(GuiGraphics g, Font font, Player p, int sw, int sh, float scale, float partial) {
         float ms = scale * HudConfig.MODULE_SCALE.get().floatValue();
-        boolean row = Layout.itemsStyle() == Layout.ItemsStyle.ROW;
+        Layout.ItemsStyle style = Layout.itemsStyle();
+        boolean vanilla = style == Layout.ItemsStyle.VANILLA;
+        boolean row = style == Layout.ItemsStyle.ROW || vanilla;
         float cx, cy;
         if (row) {
             float[] c = rowCenter(sw, sh, scale);
@@ -67,10 +69,14 @@ final class DiamondHotbar {
             if (row) {
                 // slot 1 at the far left, numbers rise to the right, the selected item is the big slot at the very right
                 float rm = rowMainHalf(), step = 2f * B + 2f * GP;
-                float c3 = -(rm + B + ROW_GAP), c2 = c3 - step, c1 = c2 - step;
-                clump(g, font, p, c1, 0f, partial, sel, 0, true);
-                clump(g, font, p, c2, 0f, partial, sel, 4, true);
-                clump(g, font, p, c3, 0f, partial, sel, 8, true);
+                if (vanilla) {
+                    vanillaBlock(g, font, p, partial, sel, rm);
+                } else {
+                    float c3 = -(rm + B + ROW_GAP), c2 = c3 - step, c1 = c2 - step;
+                    clump(g, font, p, c1, 0f, partial, sel, 0, true);
+                    clump(g, font, p, c2, 0f, partial, sel, 4, true);
+                    clump(g, font, p, c3, 0f, partial, sel, 8, true);
+                }
                 g.pose().pushPose();
                 g.pose().scale(rm / B, rm / B, 1f);
                 mainDiamond(g, font, p, now);
@@ -124,6 +130,34 @@ final class DiamondHotbar {
         if (t < 1f) diamondLine(m, withAlpha(SEL, Math.round(200 * (1f - t))), 0f, 0f, B + 1f + 2.5f * t, B + 1f + 2.5f * t, 1.1f);
     }
 
+    // ------------------------------------------------------------------------------------------ vanilla preset
+
+    private static final float VS = HS + 1.2f;
+
+    /** How far the vanilla preset reaches left of the big slot's centre, minus the big slot itself (for the layout editor frame). */
+    static float vanillaReach() {
+        return ROW_GAP + 4f * VS + 4f * HS + 3.2f + 4f;
+    }
+
+    /**
+     * Vanilla preset: the nine hotbar slots as one large diamond (a 3x3 grid turned 45 degrees: columns of 1, 2, 3, 2, 1,
+     * numbered left to right and top to bottom) to the left of the big slot, and the off-hand slot at its left tip.
+     */
+    private static void vanillaBlock(GuiGraphics g, Font font, Player p, float partial, int sel, float rm) {
+        float bh = 2f * VS + HS;
+        float cb = -(rm + ROW_GAP + bh);
+        int slot = 0;
+        for (int col = -2; col <= 2; col++) {
+            int n = 3 - Math.abs(col);
+            for (int k = 0; k < n; k++) {
+                float y = (k - (n - 1) / 2f) * 2f * VS;
+                itemSlot(g, font, p, p.getInventory().items.get(slot), cb + col * VS, y, slot == sel, partial, -1);
+                slot++;
+            }
+        }
+        itemSlot(g, font, p, p.getOffhandItem(), cb - 2f * VS - 2f * HS - 3.2f, 0f, false, partial, 1);
+    }
+
     // ------------------------------------------------------------------------------------------ clumps and slots
 
     private static void clump(GuiGraphics g, Font font, Player p, float cx, float cy, float partial, int sel, int first, boolean leftToRight) {
@@ -135,7 +169,7 @@ final class DiamondHotbar {
             int idx = first + i;
             if (idx <= 8) {
                 ItemStack st = p.getInventory().items.get(idx);
-                itemSlot(g, font, p, st, x, y, idx == sel, partial, idx == 8 ? 3 : -1);
+                itemSlot(g, font, p, st, x, y, idx == sel, partial, -1);
             } else if (idx == 9) {
                 itemSlot(g, font, p, p.getOffhandItem(), x, y, false, partial, 1);
             } else if (idx == 10) {
@@ -146,7 +180,7 @@ final class DiamondHotbar {
         }
     }
 
-    /** glyph: shown dim while the slot is empty. -1 none (a small dim diamond), 0 sword, 1 shield, 2 flask, 3 star. */
+    /** glyph: shown dim while the slot is empty. -1 none (a small dim diamond), 0 sword, 1 shield (off-hand), 2 flask, 3 star. */
     private static void itemSlot(GuiGraphics g, Font font, Player p, ItemStack st, float x, float y, boolean selected, float partial, int glyph) {
         Matrix4f m = g.pose().last().pose();
         plate(m, x, y, HS, selected);
@@ -226,6 +260,27 @@ final class DiamondHotbar {
         g.pose().popPose();
     }
 
+    /** Off-hand icon: a heater shield with a gold rim, a dark blue field, a cross and a boss in the middle. */
+    private static void shield(Matrix4f m, float x, float y, float s) {
+        float[] o = {-5f, -5.2f, 5f, -5.2f, 5f, 0.2f, 3.4f, 3.6f, 0f, 6.2f, -3.4f, 3.6f, -5f, 0.2f};
+        poly(m, withAlpha(GOLD, 175), scaled(o, x, y, s, 1f));
+        poly(m, argb(30, 36, 84, 235), scaled(o, x, y, s, 0.74f));
+        int cross = withAlpha(GOLD, 170);
+        line(m, cross, x, y + s * -3.7f, x, y + s * 4.5f, 0.85f * s);
+        line(m, cross, x - s * 3.6f, y - s * 1.2f, x + s * 3.6f, y - s * 1.2f, 0.85f * s);
+        diamondFill(m, withAlpha(GOLD, 235), x, y - s * 1.2f, 1.3f * s, 1.3f * s);
+        line(m, withAlpha(WHITE, 110), x - s * 4.4f, y - s * 4.9f, x + s * 4.4f, y - s * 4.9f, 0.7f * s);
+    }
+
+    private static float[] scaled(float[] pts, float x, float y, float s, float k) {
+        float[] r = new float[pts.length];
+        for (int i = 0; i < pts.length; i += 2) {
+            r[i] = x + pts[i] * s * k;
+            r[i + 1] = y + pts[i + 1] * s * k;
+        }
+        return r;
+    }
+
     private static void glyph(Matrix4f m, float x, float y, int glyph, float s) {
         int c = withAlpha(GOLD, 95);
         switch (glyph) {
@@ -233,7 +288,7 @@ final class DiamondHotbar {
                 line(m, c, x - 4f * s, y + 4f * s, x + 4f * s, y - 4f * s, 1.1f * s);
                 line(m, c, x - 3.2f * s, y - 0.8f * s, x + 0.8f * s, y + 3.2f * s, 1.1f * s);
             }
-            case 1 -> poly(m, c, x - 3.6f * s, y - 3.8f * s, x + 3.6f * s, y - 3.8f * s, x + 3.6f * s, y + 0.4f * s, x, y + 4.4f * s, x - 3.6f * s, y + 0.4f * s);
+            case 1 -> shield(m, x, y, s * 1.1f);
             case 2 -> {
                 poly(m, c, x - 1.1f * s, y - 4f * s, x + 1.1f * s, y - 4f * s, x + 1.1f * s, y - 1.4f * s, x - 1.1f * s, y - 1.4f * s);
                 poly(m, c, x - 1.4f * s, y - 1.6f * s, x + 1.4f * s, y - 1.6f * s, x + 3.4f * s, y + 3.6f * s, x - 3.4f * s, y + 3.6f * s);

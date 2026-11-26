@@ -17,19 +17,17 @@ import org.apache.logging.log4j.Logger;
 import org.joml.Matrix4f;
 
 /**
- * Minimal compass: a thin, translucent dark bar with a fine gold rail on its top and bottom edge, small letters and tick
- * marks sliding along it, and a woven diamond-knot ornament on each end (no flat end plate: the ornament itself is the
- * end). Nothing else: no pointer, no degree readout. Remnants Minimap markers sit on the bar with their distance below.
+ * Compass after Skyrim's: a thin dark bar with the direction letters standing on it (white, black outline), and a
+ * pierced gold lozenge on each end (Skyrim's is silver). Nothing else: no ticks, no pointer, no degree readout.
+ * Remnants Minimap markers sit on the bar with their distance below.
  */
 final class CompassBar {
     private CompassBar() {}
 
     private static final Logger LOG = LogManager.getLogger("PhantomZHud/Compass");
     private static final String[] NAMES = {"N", "NE", "E", "SE", "S", "SW", "W", "NW"};
-    private static final float VIEW = 110f, BAND = 8f, MID = 4f;
-    private static final int GOLD_HI = argb(240, 204, 120, 255), BAR = argb(8, 8, 12, 255);
-    /** Distance from an ornament's centre to the bar end: the inner satellite diamond's tip touches the bar. */
-    private static final float KNOT_GAP = 6.9f;
+    private static final float VIEW = 110f, BAND = 5f, MID = 9f;
+    private static final float KNOT_HW = 15f, KNOT_HH = 8.5f;
 
     static void render(GuiGraphics g, Font font, Player p, int sw, float scale, float partial) {
         float W = HudConfig.COMPASS_WIDTH.get();
@@ -41,55 +39,73 @@ final class CompassBar {
         float half = W / 2f, ppd = W / VIEW;
         float heading = (Mth.wrapDegrees(p.getViewYRot(partial) + 180f) + 360f) % 360f;
 
-        // translucent body (the world stays visible through it) with a thin gold rail on the top and bottom edge
-        rect(m, withAlpha(BAR, 120), -half, 0f, half, BAND);
-        rect(m, withAlpha(GOLD_HI, 228), -half, -0.05f, half, 0.7f);
-        rect(m, withAlpha(GOLD_HI, 228), -half, BAND - 0.7f, half, BAND + 0.05f);
+        // thin dark bar, a touch lighter along its top edge, slightly see-through
+        rect(m, argb(24, 24, 50, 205), -half, MID - BAND / 2f, half, MID + BAND / 2f);
+        rect(m, argb(62, 64, 108, 170), -half, MID - BAND / 2f, half, MID - BAND / 2f + 1f);
 
-        // letters and small ticks (they fade out before the ornaments)
-        for (int deg = 0; deg < 360; deg += 5) {
+        // letters standing on the bar (they fade out before the lozenges)
+        for (int deg = 0; deg < 360; deg += 45) {
             float d = Mth.wrapDegrees(deg - heading);
             if (Math.abs(d) > VIEW / 2f) continue;
             float x = d * ppd;
-            float edgeFade = PlayerBlock.clamp01((half - Math.abs(x) - 2f) / 10f);
+            float edgeFade = PlayerBlock.clamp01((half - Math.abs(x) - 3f) / 9f);
             if (edgeFade <= 0.02f) continue;
-            if (deg % 45 == 0) {
-                String s = NAMES[deg / 45];
-                boolean cardinal = deg % 90 == 0;
-                float ts = cardinal ? 0.82f : 0.6f;
-                g.pose().pushPose();
-                g.pose().translate(x, MID - 3.5f * ts, 0);
-                g.pose().scale(ts, ts, 1f);
-                g.drawString(font, s, Math.round(-font.width(s) / 2f), 0, withAlpha(BONE, Math.round(255 * edgeFade)), true);
-                g.pose().popPose();
-            } else if (deg % 15 == 0) {
-                line(g.pose().last().pose(), withAlpha(CREAM, Math.round(170 * edgeFade)), x, MID - 1.1f, x, MID + 1.1f, 0.55f);
-            } else {
-                line(g.pose().last().pose(), withAlpha(CREAM, Math.round(80 * edgeFade)), x, MID - 0.6f, x, MID + 0.6f, 0.45f);
-            }
+            String s = NAMES[deg / 45];
+            float ts = deg % 90 == 0 ? 1.15f : 0.8f;
+            outlined(g, font, s, x, MID - 3.5f * ts, ts, Math.round(255 * edgeFade));
         }
 
         // markers from Remnants Minimap
         if (HudConfig.COMPASS_MARKERS.get()) Markers.draw(g, font, p, heading, ppd);
 
         m = g.pose().last().pose();
-        knot(m, -half - KNOT_GAP);
-        knot(m, half + KNOT_GAP);
+        knot(m, -half - KNOT_HW, 1);
+        knot(m, half + KNOT_HW, -1);
+        g.pose().popPose();
+    }
+
+    /** White text with a thin black outline (drawn four times offset), centred on x. */
+    private static void outlined(GuiGraphics g, Font font, String s, float x, float y, float ts, int alpha) {
+        g.pose().pushPose();
+        g.pose().translate(x, y, 0);
+        g.pose().scale(ts, ts, 1f);
+        int ox = Math.round(-font.width(s) / 2f);
+        int black = withAlpha(INK, alpha), white = withAlpha(0xFFF4F4F8, alpha);
+        float o = 0.75f;
+        float[][] off = {{o, 0f}, {-o, 0f}, {0f, o}, {0f, -o}};
+        for (float[] f : off) {
+            g.pose().pushPose();
+            g.pose().translate(f[0], f[1], 0f);
+            g.drawString(font, s, ox, 0, black, false);
+            g.pose().popPose();
+        }
+        g.drawString(font, s, ox, 0, white, false);
         g.pose().popPose();
     }
 
     /**
-     * The end ornament: a centre diamond with four satellite diamonds around it, taller than the bar. Symmetric, so the
-     * same shape serves both ends.
+     * The end ornament: a gold lozenge (flat top and bottom, pointed sides) with a black outline and a lattice of small
+     * pierced holes plus one larger ring on the side facing the bar. in = +1 for the left end (bar to its right), -1 on the right.
      */
-    private static void knot(Matrix4f m, float cx) {
-        final float big = 3.3f, small = 2.3f, dist = 4.6f;
-        float[][] sat = {{dist, 0f}, {-dist, 0f}, {0f, -dist}, {0f, dist}};
-        for (float[] o : sat) diamondFill(m, withAlpha(BAR, 150), cx + o[0], MID + o[1], small, small);
-        diamondFill(m, withAlpha(BAR, 200), cx, MID, big, big);
-        for (float[] o : sat) diamondLine(m, withAlpha(GOLD, 235), cx + o[0], MID + o[1], small, small, 0.7f);
-        diamondLine(m, GOLD_HI, cx, MID, big, big, 0.9f);
-        diamondFill(m, GOLD_HI, cx, MID, 1.2f, 1.2f);
+    private static void knot(Matrix4f m, float cx, int in) {
+        float hw = KNOT_HW, hh = KNOT_HH, fl = 5.5f;
+        float[] hex = {-hw, 0f, -fl, -hh, fl, -hh, hw, 0f, fl, hh, -fl, hh};
+        float[] out = new float[12], fill = new float[12];
+        for (int i = 0; i < 6; i++) {
+            out[i * 2] = cx + hex[i * 2] * 1.075f;
+            out[i * 2 + 1] = MID + hex[i * 2 + 1] * 1.13f;
+            fill[i * 2] = cx + hex[i * 2];
+            fill[i * 2 + 1] = MID + hex[i * 2 + 1];
+        }
+        poly(m, INK, out);
+        int tip = argb(226, 178, 84, 255), hi = argb(255, 232, 160, 255), lo = argb(176, 126, 46, 255);
+        polyColors(m, 0f, fill, new int[] {tip, hi, hi, tip, lo, lo});
+        int hole = argb(58, 40, 22, 255);
+        float[][] holes = {{-9.5f, 0.4f}, {-5.8f, -3.5f}, {-5.8f, 3.4f}, {-2f, -0.4f}, {1.8f, -3.6f}, {1.8f, 3.5f}};
+        for (float[] h : holes) diamondFill(m, hole, cx + in * h[0], MID + h[1], 1.15f, 1.15f);
+        diamondLine(m, hole, cx + in * 8.6f, MID, 3.4f, 3.4f, 0.9f);
+        diamondFill(m, hole, cx + in * 8.6f, MID, 1.2f, 1.2f);
+        line(m, withAlpha(WHITE, 120), cx - hw * 0.55f, MID - hh + 0.6f, cx + hw * 0.55f, MID - hh + 0.6f, 0.6f);
     }
 
     /** Remnants Minimap markers by reflection; switches itself off after repeated failures. */
@@ -144,12 +160,12 @@ final class CompassBar {
                     int rgb = ((Integer) tint.invoke(mk)) & 0xFFFFFF;
                     int col = 0xFF000000 | rgb;
                     Matrix4f m = g.pose().last().pose();
-                    diamondFill(m, INK, x, MID, 3.7f, 3.7f);
-                    diamondFill(m, col, x, MID, 2.7f, 2.7f);
-                    diamondLine(m, withAlpha(GOLD, 230), x, MID, 3.7f, 3.7f, 0.6f);
+                    diamondFill(m, INK, x, MID, 4.2f, 4.2f);
+                    diamondFill(m, col, x, MID, 3.1f, 3.1f);
+                    diamondLine(m, withAlpha(GOLD, 230), x, MID, 4.2f, 4.2f, 0.6f);
                     String s = dist >= 1000 ? String.format("%.1fk", dist / 1000.0) : Math.round(dist) + "m";
                     g.pose().pushPose();
-                    g.pose().translate(x, BAND + 3.4f, 0);
+                    g.pose().translate(x, MID + 5.4f, 0);
                     g.pose().scale(0.5f, 0.5f, 1f);
                     g.drawString(font, s, Math.round(-font.width(s) / 2f), 0, BONE, true);
                     g.pose().popPose();
