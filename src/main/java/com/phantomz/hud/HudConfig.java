@@ -6,8 +6,8 @@ public final class HudConfig {
     public static final ForgeConfigSpec SPEC;
     public static final ForgeConfigSpec.BooleanValue ENABLED, HIDE_OTHER_HUDS;
     public static final ForgeConfigSpec.BooleanValue SHOW_CHIPS, SHOW_XP, SHOW_EFFECTS, SHOW_SKILLS, SHOW_BOSS, SHOW_COMPASS;
-    public static final ForgeConfigSpec.BooleanValue COMPASS_MARKERS, COMPASS_DEATHS, SHOW_MOUNT, MOVE_CHAT, AUTO_HIDE_BOSS, BUILTIN_HIDE, SHOW_HOTBAR, SHOW_MANA_BAR;
-    public static final ForgeConfigSpec.ConfigValue<java.util.List<? extends String>> HIDE_OVERLAYS;
+    public static final ForgeConfigSpec.BooleanValue COMPASS_MARKERS, COMPASS_DEATHS, SHOW_MOUNT, MOVE_CHAT, AUTO_HIDE_BOSS, BUILTIN_HIDE, SHOW_HOTBAR, SHOW_MANA_BAR, BOSS_EVENT_COLORS;
+    public static final ForgeConfigSpec.ConfigValue<java.util.List<? extends String>> HIDE_OVERLAYS, BOSS_COLORS;
     public static final ForgeConfigSpec.IntValue CHAT_SHIFT_X, CHAT_SHIFT_Y, ITEM_NAME_RAISE;
     public static final ForgeConfigSpec.DoubleValue SCALE;
     public static final ForgeConfigSpec.IntValue MARGIN_X, MARGIN_Y, SKILLS_Y, MODULE_MARGIN_X, MODULE_MARGIN_Y, EFFECTS_OFFSET_Y, BOSS_MAX;
@@ -49,10 +49,15 @@ public final class HudConfig {
         SHOW_BOSS = b.comment("Replace every vanilla-style boss bar (including other mods' custom bosses that use boss events) with the PhantomZ one.").define("show_boss_bars", true);
         AUTO_HIDE_BOSS = b.comment("Also hide other mods' own boss bar overlays (any overlay whose id contains 'boss'). Intro / title overlays are left alone.").define("hide_other_boss_overlays", true);
         BOSS_MAX = b.comment("Maximum number of boss bars shown at once.").defineInRange("max_boss_bars", 3, 1, 8);
+        BOSS_EVENT_COLORS = b.comment("Colour each boss bar by the colour its boss event uses (pink, blue, red, green, yellow, purple, white). false = every bar crimson.").define("boss_event_colors", true);
+        BOSS_COLORS = b.comment("Custom colour for specific bosses, e.g. [\"The Enlightened One=#FF8A00\", \"minecraft:wither=#8A2BE2\", \"dragon=#40C0FF\"]. "
+                + "Each entry is 'name=#RRGGBB'. The name is matched (case-insensitive) against a part of the boss bar's name, or against the boss's entity id when the bar is linked to one. "
+                + "The first matching entry wins and overrides the event colour.")
+                .defineList("boss_colors", java.util.List.of(), o -> o instanceof String);
         b.pop();
         b.push("compass");
-        SHOW_COMPASS = b.comment("Thin compass at the top. Also hides the Advanced Compass mod's own bar while on.").define("show_compass", true);
-        COMPASS_WIDTH = b.comment("Compass width (GUI pixels).").defineInRange("compass_width", 300, 100, 800);
+        SHOW_COMPASS = b.comment("Compass at the top (false = no compass at all; also togglable in the layout editor with ] or /phantomzhud compass on|off). Also hides the Advanced Compass mod's own bar while on.").define("show_compass", true);
+        COMPASS_WIDTH = b.comment("Compass width (GUI pixels).").defineInRange("compass_width", 210, 60, 800);
         COMPASS_MARKERS = b.comment("Show Remnants Minimap markers on the compass (needs Remnants Minimap).").define("compass_remnant_markers", true);
         COMPASS_DEATHS = b.comment("Include death markers.").define("compass_show_deaths", true);
         COMPASS_RANGE = b.comment("Markers farther than this (blocks) are hidden. 0 = no limit.").defineInRange("compass_marker_range", 0, 0, 1000000);
@@ -68,6 +73,11 @@ public final class HudConfig {
         ITEM_NAME_RAISE = b.comment("How far the held-item name moves up (GUI pixels).").defineInRange("item_name_raise", 0, 0, 100);
         b.pop();
         SPEC = b.build();
+    }
+
+    static void setCompass(boolean on) {
+        SHOW_COMPASS.set(on);
+        SHOW_COMPASS.save();
     }
 
     /** Default look is 10% smaller than the original sizes; the config scale multiplies on top of that. */

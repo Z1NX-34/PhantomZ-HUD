@@ -47,6 +47,11 @@ final class LayoutScreen extends Screen {
             b.setMessage(Component.literal("Preset: " + Layout.itemsStyle().label));
             sel = null;
         }).bounds(width / 2 - 84, height / 2 + 32, 168, 20).build());
+        addRenderableWidget(Button.builder(Component.literal("Compass: " + (HudConfig.SHOW_COMPASS.get() ? "On" : "Off")), b -> {
+            HudConfig.setCompass(!HudConfig.SHOW_COMPASS.get());
+            b.setMessage(Component.literal("Compass: " + (HudConfig.SHOW_COMPASS.get() ? "On" : "Off")));
+            if (!HudConfig.SHOW_COMPASS.get() && sel == Layout.Mod.COMPASS) sel = null;
+        }).bounds(width / 2 - 84, height / 2 + 56, 168, 20).build());
     }
 
     @Override

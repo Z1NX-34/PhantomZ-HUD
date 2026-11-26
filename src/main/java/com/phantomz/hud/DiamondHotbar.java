@@ -11,7 +11,8 @@ import org.joml.Matrix4f;
 /**
  * Bottom-right module. A big diamond shows the item in your hand (it follows the scroll wheel / number keys). Three
  * clumps of four small diamonds, each clump exactly the size of the big diamond, wrap its right half:
- * top-right = hotbar 1-4, right = hotbar 5-8, bottom-right = hotbar 9, off-hand, selected spell, healing flask (reserved).
+ * top-right = hotbar 1-4, right = hotbar 5-8, bottom-right = hotbar 9, off-hand, and (only with Iron's Spells installed)
+ * the selected spell and the reserved healing flask.
  * The XP bar runs along the whole top-left and bottom-left edge of the module with the level badge at its apex.
  * Slots inside a clump are ordered top, right, bottom, left.
  */
@@ -138,9 +139,9 @@ final class DiamondHotbar {
             } else if (idx == 9) {
                 itemSlot(g, font, p, p.getOffhandItem(), x, y, false, partial, 1);
             } else if (idx == 10) {
-                spellSlot(g, x, y);
-            } else {
-                emptySlot(g, x, y, 2);
+                if (IronsSpells.loaded()) spellSlot(g, x, y);        // without Iron's Spells there is no spell to show
+            } else if (IronsSpells.loaded()) {
+                emptySlot(g, x, y, 2);                                // the reserved flask slot only belongs to the modded setup
             }
         }
     }

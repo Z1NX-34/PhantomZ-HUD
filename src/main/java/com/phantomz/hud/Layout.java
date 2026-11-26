@@ -43,9 +43,9 @@ final class Layout {
         }
     }
 
-    /** How the item module is arranged: the original diamond cluster, or the modular row (big slot far right, clumps to its left). */
+    /** How the item module is arranged: the modular row (default: big slot far right, clumps to its left) or the diamond cluster. */
     enum ItemsStyle {
-        CLUSTER("Default"), ROW("Modular");
+        ROW("Modular"), CLUSTER("Cluster");
 
         final String label;
 
@@ -58,7 +58,7 @@ final class Layout {
         }
     }
 
-    private static ItemsStyle itemsStyle = ItemsStyle.CLUSTER;
+    private static ItemsStyle itemsStyle = ItemsStyle.ROW;
 
     static ItemsStyle itemsStyle() {
         if (!loaded) load();
@@ -110,7 +110,7 @@ final class Layout {
                 try {
                     itemsStyle = ItemsStyle.valueOf(root.get("itemsStyle").getAsString());
                 } catch (IllegalArgumentException ignored) {
-                    itemsStyle = ItemsStyle.CLUSTER;
+                    itemsStyle = ItemsStyle.ROW;
                 }
             }
             JsonObject mods = root.getAsJsonObject("modules");
@@ -225,13 +225,13 @@ final class Layout {
                 return new Frame(sw - 4f * s, sh / 2f + HudConfig.EFFECTS_OFFSET_Y.get() * s, s, -((cols - 1) * 73.2f + 66f), -h, 1f, h);
             }
             case COMPASS: {
-                float half = HudConfig.COMPASS_WIDTH.get() / 2f + 6f;
-                return new Frame(sw / 2f, 5f, s, -half - 21f, -5f, half + 21f, 26f);
+                float half = HudConfig.COMPASS_WIDTH.get() / 2f + 7f;
+                return new Frame(sw / 2f, 5f, s, -half - 9f, -5f, half + 9f, 20f);
             }
             case BOSS: {
                 int k = Math.max(1, Math.min(BossBars.count(), HudConfig.BOSS_MAX.get()));
                 float w = Math.min(270f, sw / s * 0.42f);
-                return new Frame(sw / 2f, sh - 92f * s, s, -w / 2f - 5f, -14f - (k - 1) * 34f, w / 2f + 5f, 10f);
+                return new Frame(sw / 2f, sh - 92f * s, s, -w / 2f - 11f, -14f - (k - 1) * 34f, w / 2f + 11f, 12f);
             }
             default: {
                 float lift = p != null ? DragonBars.mountLift(p.getVehicle()) : 0f;

@@ -91,11 +91,24 @@ public final class HudEvents {
                     }))
                     .then(net.minecraft.commands.Commands.literal("preset")
                             .then(net.minecraft.commands.Commands.literal("default").executes(c -> {
-                                Layout.setItemsStyle(Layout.ItemsStyle.CLUSTER);
+                                Layout.setItemsStyle(Layout.ItemsStyle.ROW);
                                 return 1;
                             }))
                             .then(net.minecraft.commands.Commands.literal("modular").executes(c -> {
                                 Layout.setItemsStyle(Layout.ItemsStyle.ROW);
+                                return 1;
+                            }))
+                            .then(net.minecraft.commands.Commands.literal("cluster").executes(c -> {
+                                Layout.setItemsStyle(Layout.ItemsStyle.CLUSTER);
+                                return 1;
+                            })))
+                    .then(net.minecraft.commands.Commands.literal("compass")
+                            .then(net.minecraft.commands.Commands.literal("on").executes(c -> {
+                                HudConfig.setCompass(true);
+                                return 1;
+                            }))
+                            .then(net.minecraft.commands.Commands.literal("off").executes(c -> {
+                                HudConfig.setCompass(false);
                                 return 1;
                             }))));
         }

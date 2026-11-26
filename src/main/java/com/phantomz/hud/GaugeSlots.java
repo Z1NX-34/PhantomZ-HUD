@@ -14,8 +14,8 @@ import org.joml.Matrix4f;
 
 /**
  * Diamond slots around the crest (drawn in the player block's pose):
- * the Epic Fight special move centred on the crest's bottom-left edge (always there, a default move icon when there is
- * none), and a row of three refill diamonds on the crest's top-right: mana, armor, hunger. Each fills from the bottom
+ * the Epic Fight special move centred on the crest's bottom-left edge (only with Epic Fight installed; a default move
+ * icon when there is none), and a row of three refill diamonds on the crest's top-right: mana, armor, hunger. Each fills from the bottom
  * with its colour, its icon stays fully visible, and current / max is written beside it. Big numbers shorten (1.2k,
  * 15k, 1.5M).
  */
@@ -42,6 +42,7 @@ final class GaugeSlots {
     // ------------------------------------------------------------------------------------------ special move
 
     private static void special(GuiGraphics g, float partial) {
+        if (!net.minecraftforge.fml.ModList.get().isLoaded("epicfight")) return;       // no Epic Fight = no special move
         float cx = PlayerBlock.CX, cy = PlayerBlock.CY, rg = PlayerBlock.R + 3f;
         // centred on the crest's bottom-left edge, with a small gap
         float hs = HS_SPECIAL;
