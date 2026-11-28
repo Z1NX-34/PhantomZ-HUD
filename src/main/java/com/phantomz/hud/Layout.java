@@ -239,7 +239,7 @@ final class Layout {
             case BOSS: {
                 int k = Math.max(1, Math.min(BossBars.count(), HudConfig.BOSS_MAX.get()));
                 float w = Math.min(270f, sw / s * 0.42f);
-                return new Frame(sw / 2f, sh - 92f * s, s, -w / 2f - 2f, -23f - (k - 1) * 50f, w / 2f + 2f, 24f);
+                return new Frame(sw / 2f, sh - 92f * s, s, -w / 2f - 2f, -9f - (k - 1) * 30f, w / 2f + 2f, 17f);
             }
             default: {
                 float lift = p != null ? DragonBars.mountLift(p.getVehicle()) : 0f;

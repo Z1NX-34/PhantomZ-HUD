@@ -25,7 +25,7 @@ import org.joml.Matrix4f;
 
 /**
  * Boss bars for every boss event the game knows about (including other mods' bosses that use the vanilla system): name
- * and HP numbers above a pixel-art bar (thick frame, six segments, a skull plate on top, thorn tufts on the corners)
+ * and HP numbers standing on a slim pixel-art bar (six segments, thorn tufts on the corners)
  * coloured per boss (the boss event's colour, or a custom colour from the config) with a drain trail, and a slim posture
  * bar below it when Epic Fight Posture Integration reports posture for that boss.
  */
@@ -172,23 +172,8 @@ final class BossBars {
 
     /** One art pixel in GUI units: the whole bar is drawn on this grid, like pixel art. */
     private static final float PX = 1.1f;
-    private static final int BAR_ROWS = 13;
+    private static final int BAR_ROWS = 8;
 
-    /** Centre piece above the bar: crown, skull plate, thorn branches. 27 columns, rows -10..0, centred on the bar. */
-    private static final String[] EMBLEM = {
-        "..........KKKKKKK..........",
-        "........KGGKAaAKGGK........",
-        "....AA..KGGKKKKKGGK..AA....",
-        "....aA..KPPPPPPPPPK..Aa....",
-        "..AAA...KAPPWWWPPAK...AAA..",
-        ".KK.K...KAPWWWWWPAK...K.KK.",
-        "..KKKKKKKAPWPWPWPAKKKKKK...",
-        ".KK.K.K.KAPWWWWWPAK.K.K.KK.",
-        ".AAA....KAPPWPWPPAK....AAA.",
-        "...ggPP.KAPPPPPPPAK.PPgg...",
-        "..gAAAA.KAAaaaaaAAK.AAAAg..",
-    };
-    private static final int EMBLEM_TOP = -10, EMBLEM_COLS = 27;
     /** Thorn tuft on each top corner (rows -7..-1, col 0 = the bar's outline column, mirrored on the right). */
     private static final String[] TUFT = {
         "..A...A.....",
@@ -200,7 +185,7 @@ final class BossBars {
         "KKKKKKKKKKK.",
     };
     private static final int TUFT_TOP = -7;
-    /** Small jagged fringe under each bottom corner (rows 13..14). */
+    /** Small jagged fringe under each bottom corner (rows 8..9). */
     private static final String[] FRINGE = {
         "K.K.KK....",
         "..K.......",
@@ -273,10 +258,11 @@ final class BossBars {
         String phase = mt.find() ? "PHASE " + mt.group(1).toUpperCase(Locale.ROOT) : null;
 
         float w = Math.min(270f, sw / scale * 0.42f);
-        int n = Math.max(61, Math.round(w / PX) | 1);                  // columns, odd so the emblem has a centre column
+        int n = Math.max(61, Math.round(w / PX) | 1);                  // columns
         float x0 = -n * PX / 2f, x1 = x0 + n * PX;
         float nameScale = 0.95f, hpScale = 0.8f;
-        float room = w - font.width(hp) * hpScale - 12f - (phase == null ? 0f : 40f);
+        float inset = 12.4f * PX;                                      // the thorn tufts take this much room on each corner
+        float room = n * PX - 2f * inset - font.width(hp) * hpScale - 8f - (phase == null ? 0f : 40f);
         String shown = name;
         while (shown.length() > 3 && font.width(shown) * nameScale > room) shown = shown.substring(0, shown.length() - 1);
         if (!shown.equals(name)) shown = shown.stripTrailing() + "...";
@@ -287,20 +273,20 @@ final class BossBars {
         boolean low = pct < 0.25f && pct > 0f;
         float pulse = low ? 0.5f + 0.5f * (float) Math.sin(System.currentTimeMillis() / 170.0) : 0f;
         int[] fr = frameColors(base);
-        int plate = darken(base, 0.28f), band = darken(base, 0.28f), band2 = darken(base, 0.22f), empty = darken(base, 0.2f);
+        int empty = darken(base, 0.2f);
         int fillTop = lighten(base, 0.05f + 0.25f * pulse), fillMid = darken(base, 0.66f), fillBot = lighten(base, 0.25f + 0.2f * pulse);
         int pale = lighten(base, 0.62f);
 
-        float cx = sw / 2f, y = sh - 92f * scale - index * 50f * scale;
+        float cx = sw / 2f, y = sh - 92f * scale - index * 30f * scale;
         g.pose().pushPose();
         g.pose().translate(cx, y, 0);
         g.pose().scale(scale, scale, 1f);
         Matrix4f m = g.pose().last().pose();
 
-        // name (left) and HP (right) above the emblem
-        float ty = EMBLEM_TOP * PX - 9.4f;
+        // name on the left and HP on the right, between the thorn tufts, standing on the bar
+        float ty = -7.6f;
         g.pose().pushPose();
-        g.pose().translate(x0 + 0.5f, ty, 0f);
+        g.pose().translate(x0 + inset, ty, 0f);
         g.pose().scale(nameScale, nameScale, 1f);
         g.drawString(font, shown, 0, 0, BONE, true);
         if (phase != null) {
@@ -310,46 +296,40 @@ final class BossBars {
         }
         g.pose().popPose();
         g.pose().pushPose();
-        g.pose().translate(x1 - 0.5f, ty + 0.8f, 0f);
+        g.pose().translate(x1 - inset, ty + 0.9f, 0f);
         g.pose().scale(hpScale, hpScale, 1f);
         g.drawString(font, hp, -font.width(hp), 0, withAlpha(CREAM, 235), true);
         g.pose().popPose();
 
-        // frame: black body, then the horizontal bands (rows 1-2 top frame, 3 / 8 dark bands, 9 / 11 lower frame)
+        // slim frame: black outline, one frame row on top, the fill (4 rows), one frame row below
         rectPx(m, 0xFF050308, x0, 0f, 0, 0, n, BAR_ROWS);
-        rectPx(m, fr[4], x0, 0f, 1, 1, 1, 11);
-        rectPx(m, fr[4], x0, 0f, n - 2, 1, 1, 11);
-        rectPx(m, fr[0], x0, 0f, 2, 1, n - 4, 1);
-        rectPx(m, fr[1], x0, 0f, 2, 2, n - 4, 1);
-        rectPx(m, band, x0, 0f, 2, 3, n - 4, 1);
-        rectPx(m, empty, x0, 0f, 2, 4, n - 4, 4);
-        rectPx(m, band2, x0, 0f, 2, 8, n - 4, 1);
-        rectPx(m, fr[2], x0, 0f, 2, 9, n - 4, 1);
-        rectPx(m, fr[3], x0, 0f, 2, 11, n - 4, 1);
+        rectPx(m, fr[4], x0, 0f, 1, 1, 1, 6);
+        rectPx(m, fr[4], x0, 0f, n - 2, 1, 1, 6);
+        rectPx(m, fr[1], x0, 0f, 2, 1, n - 4, 1);
+        rectPx(m, empty, x0, 0f, 2, 2, n - 4, 4);
+        rectPx(m, fr[2], x0, 0f, 2, 6, n - 4, 1);
 
         // fill: damage trail, then three tones (top light, two middle rows, bottom light), end caps and the segment dividers
-        float fx0 = x0 + 3 * PX, fw = (n - 6) * PX;
-        if (trail > pct) rect(m, withAlpha(pale, 205), fx0, 4 * PX, fx0 + fw * trail, 8 * PX);
+        float fx0 = x0 + 2 * PX, fw = (n - 4) * PX;
+        if (trail > pct) rect(m, withAlpha(pale, 205), fx0, 2 * PX, fx0 + fw * trail, 6 * PX);
         if (pct > 0.002f) {
             float xf = fx0 + fw * pct;
-            rect(m, fillTop, fx0, 4 * PX, xf, 5 * PX);
-            rect(m, fillMid, fx0, 5 * PX, xf, 7 * PX);
-            rect(m, fillBot, fx0, 7 * PX, xf, 8 * PX);
-            rect(m, lighten(base, 0.6f), fx0, 4 * PX, fx0 + PX, 8 * PX);
-            if (pct > 0.985f) rect(m, lighten(base, 0.6f), fx0 + fw - PX, 4 * PX, fx0 + fw, 8 * PX);
+            rect(m, fillTop, fx0, 2 * PX, xf, 3 * PX);
+            rect(m, fillMid, fx0, 3 * PX, xf, 5 * PX);
+            rect(m, fillBot, fx0, 5 * PX, xf, 6 * PX);
+            rect(m, lighten(base, 0.6f), fx0, 2 * PX, fx0 + PX, 6 * PX);
+            if (pct > 0.985f) rect(m, lighten(base, 0.6f), fx0 + fw - PX, 2 * PX, fx0 + fw, 6 * PX);
         }
         for (float f : new float[] {0.107f, 0.295f, 0.5f, 0.705f, 0.893f}) {
             float dx = fx0 + fw * f - PX / 2f;
-            rect(m, 0xFF050308, dx, 4 * PX, dx + PX, 9 * PX);
-            rect(m, 0xFF050308, dx - PX, 9 * PX, dx + 2f * PX, 10 * PX);
+            rect(m, 0xFF050308, dx, 2 * PX, dx + PX, 7 * PX);
         }
 
-        // ornaments: tufts on both top corners, fringe under both bottom corners, the skull plate in the middle
-        drawMap(m, TUFT, TUFT_TOP, 0, false, n, x0, fr, base, plate);
-        drawMap(m, TUFT, TUFT_TOP, 0, true, n, x0, fr, base, plate);
-        drawMap(m, FRINGE, BAR_ROWS, 0, false, n, x0, fr, base, plate);
-        drawMap(m, FRINGE, BAR_ROWS, 0, true, n, x0, fr, base, plate);
-        drawMap(m, EMBLEM, EMBLEM_TOP, (n - EMBLEM_COLS) / 2, false, n, x0, fr, base, plate);
+        // thorn tufts on both top corners, fringe under both bottom corners
+        drawMap(m, TUFT, TUFT_TOP, 0, false, n, x0, fr, base, base);
+        drawMap(m, TUFT, TUFT_TOP, 0, true, n, x0, fr, base, base);
+        drawMap(m, FRINGE, BAR_ROWS, 0, false, n, x0, fr, base, base);
+        drawMap(m, FRINGE, BAR_ROWS, 0, true, n, x0, fr, base, base);
 
         // posture bar: the same pixel style, slimmer, centred under the bar (amber, or cool teal when the bar itself is amber)
         if (info.posture >= 0f) {
@@ -366,17 +346,16 @@ final class BossBars {
             g.pose().pushPose();
             g.pose().translate(0f, py, 0f);
             Matrix4f pm = g.pose().last().pose();
-            rect(pm, 0xFF050308, px0, 0f, px0 + pn * PX, 6 * PX);
-            rect(pm, fr[0], px0 + PX, PX, px0 + (pn - 1) * PX, 5 * PX);
-            rect(pm, darken(pb, 0.2f), px0 + 2 * PX, 2 * PX, px0 + (pn - 2) * PX, 4 * PX);
+            rect(pm, 0xFF050308, px0, 0f, px0 + pn * PX, 4 * PX);
+            rect(pm, darken(pb, 0.2f), px0 + PX, PX, px0 + (pn - 1) * PX, 3 * PX);
             if (pv > 0.01f) {
-                float pxf = px0 + 2 * PX + (pn - 4) * PX * pv;
-                rect(pm, lighten(pb, 0.1f), px0 + 2 * PX, 2 * PX, pxf, 3 * PX);
-                rect(pm, darken(pb, 0.62f), px0 + 2 * PX, 3 * PX, pxf, 4 * PX);
+                float pxf = px0 + PX + (pn - 2) * PX * pv;
+                rect(pm, lighten(pb, 0.1f), px0 + PX, PX, pxf, 2 * PX);
+                rect(pm, darken(pb, 0.62f), px0 + PX, 2 * PX, pxf, 3 * PX);
             }
             g.pose().popPose();
             g.pose().pushPose();
-            g.pose().translate(px0 - 2.5f, py + 0.4f, 0f);
+            g.pose().translate(px0 - 2.5f, py - 0.4f, 0f);
             g.pose().scale(0.55f, 0.55f, 1f);
             String lab = info.broken ? "BROKEN" : "POSTURE";
             g.drawString(font, lab, -font.width(lab), 0, info.broken ? RED : withAlpha(BONE, 190), true);
