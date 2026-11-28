@@ -17,9 +17,10 @@ import org.apache.logging.log4j.Logger;
 import org.joml.Matrix4f;
 
 /**
- * Compass after Skyrim's: a thin dark bar with the direction letters standing on it and an engraved gold lozenge on each
- * end (Skyrim's is silver). The letters are drawn as thin angular strokes with a dark outline so they stay crisp at any
- * GUI scale. Nothing else: no ticks, no pointer, no degree readout. Remnants Minimap markers sit on the bar with their
+ * Compass after Skyrim's: a thin translucent dark bar with the direction letters standing on it, flowing into a gold
+ * line-art lozenge on each end (Skyrim's is silver): the bar's body and the ornament are one outline, with a woven pattern
+ * of linked diamond rings inside. The letters are thin angular strokes with a dark outline so they stay crisp at any GUI
+ * scale. Nothing else: no ticks, no pointer, no degree readout. Remnants Minimap markers sit on the bar with their
  * distance below.
  */
 final class CompassBar {
@@ -28,7 +29,8 @@ final class CompassBar {
     private static final Logger LOG = LogManager.getLogger("PhantomZHud/Compass");
     private static final String[] NAMES = {"N", "NE", "E", "SE", "S", "SW", "W", "NW"};
     private static final float VIEW = 110f, BAND = 5f, MID = 9f;
-    private static final float KNOT_HW = 14f, KNOT_HH = 7.6f;
+    private static final float KNOT_HW = 14f, KNOT_HH = 7.6f, KNOT_FL = 5f;
+    private static final int BODY = argb(22, 24, 52, 205), ORN = argb(226, 184, 92, 255), HALO = argb(14, 12, 14, 170);
     private static final int LETTER = argb(246, 242, 228, 255);
 
     static void render(GuiGraphics g, Font font, Player p, int sw, float scale, float partial) {
@@ -41,9 +43,11 @@ final class CompassBar {
         float half = W / 2f, ppd = W / VIEW;
         float heading = (Mth.wrapDegrees(p.getViewYRot(partial) + 180f) + 360f) % 360f;
 
-        // thin dark bar, a touch lighter along its top edge, slightly see-through
-        rect(m, argb(22, 24, 52, 205), -half, MID - BAND / 2f, half, MID + BAND / 2f);
-        rect(m, argb(66, 70, 118, 170), -half, MID - BAND / 2f, half, MID - BAND / 2f + 0.8f);
+        // thin dark bar, a touch lighter along its top edge, slightly see-through, with a fine gold rail on both edges
+        rect(m, BODY, -half, MID - BAND / 2f, half, MID + BAND / 2f);
+        rect(m, argb(66, 70, 118, 150), -half, MID - BAND / 2f, half, MID - BAND / 2f + 0.7f);
+        for (int k = -1; k <= 1; k += 2) line(m, HALO, -half, MID + k * BAND / 2f, half, MID + k * BAND / 2f, 1.5f);
+        for (int k = -1; k <= 1; k += 2) line(m, withAlpha(ORN, 170), -half, MID + k * BAND / 2f, half, MID + k * BAND / 2f, 0.5f);
 
         // letters standing on the bar (they fade out before the lozenges)
         for (int deg = 0; deg < 360; deg += 45) {
@@ -59,8 +63,9 @@ final class CompassBar {
         if (HudConfig.COMPASS_MARKERS.get()) Markers.draw(g, font, p, heading, ppd);
 
         m = g.pose().last().pose();
-        knot(m, -half - KNOT_HW, 1);
-        knot(m, half + KNOT_HW, -1);
+        float xn = neck();
+        knot(m, -half - xn, 1);
+        knot(m, half + xn, -1);
         g.pose().popPose();
     }
 
@@ -99,38 +104,52 @@ final class CompassBar {
 
     // ------------------------------------------------------------------------------------------ ends
 
+    /** Local x where the lozenge's slanted side meets the bar's edge (the bar continues from there). */
+    private static float neck() {
+        float t = (KNOT_HH - BAND / 2f) / KNOT_HH;
+        return KNOT_FL + (KNOT_HW - KNOT_FL) * t;
+    }
+
     /**
-     * The end ornament: an engraved gold lozenge (flat top and bottom, pointed sides) with a black outline, a fine inner
-     * border and two linked diamond rings. in = +1 for the left end (bar to its right), -1 on the right.
+     * The end ornament: the bar widens into a gold-outlined lozenge (flat top and bottom, a point on the outer side). Inside:
+     * a fine inner border and three overlapping diamond rings, woven, with gold studs at the crossings. in = +1 for the
+     * left end (bar to its right), -1 on the right; local x points towards the bar.
      */
     private static void knot(Matrix4f m, float cx, int in) {
-        float hw = KNOT_HW, hh = KNOT_HH, fl = 5f;
-        float[] hex = {-hw, 0f, -fl, -hh, fl, -hh, hw, 0f, fl, hh, -fl, hh};
-        float[] halo = new float[12], fill = new float[12], inner = new float[12];
-        for (int i = 0; i < 6; i++) {
-            halo[i * 2] = cx + hex[i * 2] * (1f + 1.1f / hw);
-            halo[i * 2 + 1] = MID + hex[i * 2 + 1] * (1f + 1.1f / hh);
-            fill[i * 2] = cx + hex[i * 2];
-            fill[i * 2 + 1] = MID + hex[i * 2 + 1];
-            inner[i * 2] = cx + hex[i * 2] * 0.8f;
-            inner[i * 2 + 1] = MID + hex[i * 2 + 1] * 0.8f;
+        float hw = KNOT_HW, hh = KNOT_HH, fl = KNOT_FL, bt = BAND / 2f, xn = neck();
+        float[] v = {-hw, 0f, -fl, -hh, fl, -hh, xn, -bt, xn, bt, fl, hh, -fl, hh};
+        float[] fill = new float[14];
+        for (int i = 0; i < 7; i++) {
+            fill[i * 2] = cx + in * v[i * 2];
+            fill[i * 2 + 1] = MID + v[i * 2 + 1];
         }
-        poly(m, INK, halo);
-        int tip = argb(232, 190, 98, 255), hi = argb(255, 240, 184, 255), lo = argb(202, 154, 66, 255);
-        polyColors(m, 0f, fill, new int[] {tip, hi, hi, tip, lo, lo});
-        int cut = argb(124, 84, 28, 255);
-        for (int i = 0; i < 6; i++) {
-            int n = (i + 1) % 6;
-            line(m, cut, inner[i * 2], inner[i * 2 + 1], inner[n * 2], inner[n * 2 + 1], 0.5f);
+        poly(m, BODY, fill);
+        int[][] edges = {{0, 1}, {1, 2}, {2, 3}, {4, 5}, {5, 6}, {6, 0}};
+        for (int[] e : edges) line(m, HALO, fill[e[0] * 2], fill[e[0] * 2 + 1], fill[e[1] * 2], fill[e[1] * 2 + 1], 1.9f);
+        for (int[] e : edges) line(m, ORN, fill[e[0] * 2], fill[e[0] * 2 + 1], fill[e[1] * 2], fill[e[1] * 2 + 1], 0.75f);
+        for (int i : new int[] {0, 1, 2, 5, 6}) diamondFill(m, ORN, fill[i * 2], fill[i * 2 + 1], 0.4f, 0.4f);
+
+        // fine inner border (open on the bar side)
+        float k = 0.78f;
+        float[] pl = {fl * k, hh * k, -fl * k, hh * k, -hw * k, 0f, -fl * k, -hh * k, fl * k, -hh * k};
+        for (int i = 0; i + 3 < pl.length; i += 2) {
+            line(m, withAlpha(ORN, 150), cx + in * pl[i], MID + pl[i + 1], cx + in * pl[i + 2], MID + pl[i + 3], 0.45f);
         }
-        float r = 4.7f, off = 3.9f;
-        diamondLine(m, cut, cx - off, MID, r, r, 0.55f);
-        diamondLine(m, cut, cx + off, MID, r, r, 0.55f);
-        diamondLine(m, cut, cx - 9.6f, MID, 1.3f, 1.3f, 0.45f);
-        diamondLine(m, cut, cx + 9.6f, MID, 1.3f, 1.3f, 0.45f);
-        diamondFill(m, cut, cx, MID, 1.3f, 1.3f);
-        diamondFill(m, hi, cx, MID, 0.5f, 0.5f);
-        line(m, withAlpha(WHITE, 140), cx - fl * 0.9f, MID - hh + 0.7f, cx + fl * 0.9f, MID - hh + 0.7f, 0.6f);
+
+        // three overlapping diamond rings, a nested openwork centre and small hollow studs where the rings cross (all line-art)
+        float r = 4.8f;
+        float[] cs = {-5.8f, -1f, 3.8f};
+        for (float c : cs) diamondLine(m, withAlpha(ORN, 235), cx + in * c, MID, r, r, 0.55f);
+        diamondLine(m, withAlpha(ORN, 235), cx + in * cs[1], MID, 2.7f, 2.7f, 0.5f);
+        diamondLine(m, withAlpha(ORN, 200), cx + in * cs[1], MID, 1.5f, 1.5f, 0.45f);
+        diamondFill(m, ORN, cx + in * cs[1], MID, 0.45f, 0.45f);
+        for (int i = 0; i < 2; i++) {
+            float xm = (cs[i] + cs[i + 1]) / 2f, dy = r - (cs[i + 1] - cs[i]) / 2f;
+            diamondLine(m, ORN, cx + in * xm, MID - dy, 0.95f, 0.95f, 0.4f);
+            diamondLine(m, ORN, cx + in * xm, MID + dy, 0.95f, 0.95f, 0.4f);
+        }
+        diamondLine(m, ORN, cx + in * cs[0], MID, 1.2f, 1.2f, 0.4f);
+        diamondLine(m, ORN, cx + in * cs[2], MID, 1.2f, 1.2f, 0.4f);
     }
 
     /** Remnants Minimap markers by reflection; switches itself off after repeated failures. */

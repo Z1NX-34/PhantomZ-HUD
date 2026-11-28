@@ -233,7 +233,7 @@ final class Layout {
                 return new Frame(sw - 4f * s, sh / 2f + HudConfig.EFFECTS_OFFSET_Y.get() * s, s, -((cols - 1) * 73.2f + 66f), -h, 1f, h);
             }
             case COMPASS: {
-                float half = HudConfig.COMPASS_WIDTH.get() / 2f + 32f;
+                float half = HudConfig.COMPASS_WIDTH.get() / 2f + 28f;
                 return new Frame(sw / 2f, 5f, s, -half, -1f, half, 25f);
             }
             case BOSS: {
